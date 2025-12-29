@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Kessel Sabacc - Outlaws Edition</title>
+    <style>
+        :root { --sand: #c6934b; --blood: #a32a2a; --bg: #07080a; --panel: #16181d; --blue: #00f2ff; --gold: #ffd700; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; overflow: hidden; }
+        
+        /* Mesa */
+        #table {
+            position: relative; width: 1000px; height: 550px;
+            background: radial-gradient(circle, #1a1c20 0%, #000 100%);
+            border: 6px solid #222; border-radius: 200px; margin-top: 10px;
+            box-shadow: 0 0 50px #000;
+        }
+
+        /* Cartas */
+        .card {
+            width: 55px; height: 85px; background: #111;
+            border: 2px solid #444; border-radius: 5px; display: inline-flex;
+            flex-direction: column; justify-content: space-between; padding: 5px;
+            font-weight: bold; position: relative; transition: 0.3s; cursor: pointer;
+        }
+        .card.sand { color: var(--sand); border-color: var(--sand); }
+        .card.blood { color: var(--blood); border-color: var(--blood); }
+        .card.special { color: #fff; border-color: #fff; text-shadow: 0 0 5px #fff; }
+        .card.back { background: #2a2d35; border-color: #444; color: transparent !important; cursor: default; }
+        
+        .card-val { font-size: 1.4rem; text-align: center; }
+        .card-sym { text-align: center; font-size: 0.8rem; }
+
+        /* Centro e Dados */
+        .center-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 40px; align-items: center; }
+        .discard-slot { width: 65px; height: 95px; border: 2px dashed #333; border-radius: 5px; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .can-take { border-color: var(--blue); box-shadow: 0 0 15px rgba(0, 242, 255, 0.4); cursor: pointer; }
+        
+        #dice-container { display: flex; gap: 10px; font-size: 2.5rem; color: var(--gold); min-width: 120px; justify-content: center; }
+        .die { transition: 0.1s; display: inline-block; }
+        .rolling { animation: shake 0.1s infinite; }
+        @keyframes shake { 0% { transform: translate(2px, 2px) rotate(0deg); } 50% { transform: translate(-2px, -2px) rotate(5deg); } 100% { transform: translate(2px, 2px) rotate(-5deg); } }
+
+        /* Players */
+        .player-box { position: absolute; display: flex; flex-direction: column; align-items: center; width: 220px; }
+        .p0 { bottom: 15px; left: 390px; } .p1 { top: 15px; left: 390px; } .p2 { left: 30px; top: 210px; } .p3 { right: 30px; top: 210px; }
+        .info-tag { background: var(--panel); padding: 5px 15px; border-radius: 15px; border: 1px solid #333; font-size: 0.8rem; transition: 0.3s; color: #888; }
+        .active-turn { border-color: var(--sand); color: white; box-shadow: 0 0 15px rgba(198, 147, 75, 0.3); }
+
+        /* UI */
+        .controls { margin-top: 15px; display: flex; gap: 10px; }
+        button { background: #111; color: var(--sand); border: 1px solid var(--sand); padding: 10px 18px; cursor: pointer; text-transform: uppercase; font-size: 0.75rem; font-weight: bold; }
+        button:hover:not(:disabled) { background: var(--sand); color: black; }
+        button:disabled { opacity: 0.2; }
+
+        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--sand); padding: 25px; z-index: 100; width: 450px; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 100px #000; }
+        .rules-text { font-size: 0.85rem; line-height: 1.5; color: #ccc; }
+        .rules-text h4 { color: var(--sand); margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <div style="margin-top: 10px; display: flex; gap: 40px; font-size: 0.8rem; letter-spacing: 2px; color: #888;">
+        <div id="ui-round">ROUND: 1 / 3</div>
+        <div id="ui-chips">CHIPS: 10</div>
+    </div>
+
+    <div id="table">
+        <div class="center-area">
+            <div id="discard-sand-slot" class="discard-slot" onclick="handleAction('take-sand')"></div>
+            <div id="dice-container">
+                <span id="die1" class="die">🎲</span>
+                <span id="die2" class="die">🎲</span>
+            </div>
+            <div id="discard-blood-slot" class="discard-slot" onclick="handleAction('take-blood')"></div>
+        </div>
+        <div id="players-root"></div>
+    </div>
+
+    <div id="status-msg" style="margin-top: 10px; color: var(--sand); text-transform: uppercase; font-size: 0.7rem;">Carregando...</div>
+
+    <div class="controls">
+        <button id="btn-sand" onclick="handleAction('sand')">Draw Sand (1 🪙)</button>
+        <button id="btn-blood" onclick="handleAction('blood')">Draw Blood (1 🪙)</button>
+        <button id="btn-stand" onclick="handleAction('stand')">Stand</button>
+        <button onclick="showModal('modal-rules')">?</button>
+        <button onclick="showModal('modal-settings')">⚙</button>
+    </div>
+
+    <div id="modal-rules" class="modal">
+        <h3 id="rules-title" style="color:var(--sand)">Como Jogar Kessel Sabacc</h3>
+        <div class="rules-text" id="rules-content">
+            </div>
+        <button onclick="closeModals()" style="width:100%; margin-top:15px">Fechar</button>
+    </div>
+
+    <div id="modal-settings" class="modal">
+        <h3 id="settings-title">Configurações</h3>
+        <select id="lang-sel" onchange="updateLang()" style="width:100%; padding:10px; background:#000; color:#fff; border:1px solid #444;">
+            <option value="pt">Português</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+        </select>
+        <div id="name-inputs" style="margin-top:10px">
+            <input type="text" id="n0" value="Kay Vess" style="width:90%; padding:8px; margin:5px 0; background:#000; color:#fff; border:1px solid #444;">
+            <input type="text" id="n1" value="Nix" style="width:90%; padding:8px; margin:5px 0; background:#000; color:#fff; border:1px solid #444;">
+        </div>
+        <button onclick="applySettings()" style="width:100%; margin-top:10px">Salvar e Reiniciar</button>
+    </div>
+
+    <script>
+        const i18n = {
+            pt: {
+                drawS: "Comprar Areia", drawB: "Comprar Sangue", stand: "Passar", round: "RODADA", chips: "FICHAS", turn: "Sua Vez", win: "Vencedor",
+                rulesT: "Como Jogar", settingsT: "Configurações",
+                rulesBody: `<h4>Objetivo</h4>Ter o par com a menor diferença possível. O par perfeito (mesmo valor) chama-se Sabacc.
+                <h4>Hierarquia das Mãos</h4>1. <b>Sabacc:</b> Pares iguais. 1-1 (Melhor) até 6-6.<br>2. <b>Nips:</b> Se ninguém tem par, vence a menor diferença (ex: 1 e 2 é melhor que 1 e 5).
+                <h4>Cartas Especiais</h4><b>Sylop (S):</b> Copia o valor da outra carta na mão.<br><b>Imposter (?):</b> O valor é decidido pelos dados no final do jogo.`
+            },
+            en: {
+                drawS: "Draw Sand", drawB: "Draw Blood", stand: "Stand", round: "ROUND", chips: "CHIPS", turn: "Your Turn", win: "Winner",
+                rulesT: "How to Play", settingsT: "Settings",
+                rulesBody: `<h4>Goal</h4>Get a pair with the lowest possible difference. A matching pair is called Sabacc.
+                <h4>Hand Ranking</h4>1. <b>Sabacc:</b> Identical values. 1-1 (Best) to 6-6.<br>2. <b>Nips:</b> If no one has a pair, the smallest difference wins.
+                <h4>Special Cards</h4><b>Sylop (S):</b> Copies the value of your other card.<br><b>Imposter (?):</b> Value is decided by dice at the end of the game.`
+            },
+            es: {
+                drawS: "Robar Arena", drawB: "Robar Sangre", stand: "Pasar", round: "RONDA", chips: "FICHAS", turn: "Tu Turno", win: "Ganador",
+                rulesT: "Cómo Jugar", settingsT: "Ajustes",
+                rulesBody: `<h4>Objetivo</h4>Tener el par con la menor diferencia. El par idéntico se llama Sabacc.
+                <h4>Jerarquía</h4>1. <b>Sabacc:</b> Pares iguales. 1-1 (Mejor) a 6-6.<br>2. <b>Nips:</b> Si nadie tiene par, gana la menor diferencia.
+                <h4>Cartas Especiales</h4><b>Sylop (S):</b> Copia el valor de la otra carta.<br><b>Imposter (?):</b> El valor se decide con dados al final.`
+            }
+        };
+
+        let lang = 'pt';
+        let round = 1, currentPlayer = 0, gameActive = true;
+        let players = [], discardSand = null, discardBlood = null;
+        let diceResults = [1, 1];
+
+        function createCard(family) {
+            const r = Math.random();
+            if (r < 0.1) return { val: 0, family, type: 'sylop', label: 'S' };
+            if (r < 0.2) return { val: '?', family, type: 'imposter', label: '?' };
+            return { val: Math.floor(Math.random() * 6) + 1, family, type: 'normal' };
+        }
+
+        function initGame() {
+            players = []; round = 1; currentPlayer = 0; gameActive = true;
+            discardSand = createCard('sand'); discardBlood = createCard('blood');
+            for(let i=0; i<4; i++) {
+                players.push({
+                    name: document.getElementById(`n${i}`)?.value || `Player ${i+1}`,
+                    sand: createCard('sand'), blood: createCard('blood'),
+                    chips: 10, isAI: i !== 0
+                });
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            const t = i18n[lang];
+            document.getElementById('ui-round').innerText = `${t.round}: ${round} / 3`;
+            document.getElementById('ui-chips').innerText = `${t.chips}: ${players[0].chips}`;
+            document.getElementById('status-msg').innerText = currentPlayer === 0 ? t.turn : `${players[currentPlayer].name}...`;
+            
+            document.getElementById('rules-title').innerText = t.rulesT;
+            document.getElementById('rules-content').innerHTML = t.rulesBody;
+            document.getElementById('btn-sand').innerText = `${t.drawS} (1 🪙)`;
+            document.getElementById('btn-blood').innerText = `${t.drawB} (1 🪙)`;
+            document.getElementById('btn-stand').innerText = t.stand;
+
+            const root = document.getElementById('players-root');
+            root.innerHTML = '';
+            players.forEach((p, i) => {
+                const isHidden = p.isAI && gameActive;
+                const pDiv = document.createElement('div');
+                pDiv.className = `player-box p${i}`;
+                pDiv.innerHTML = `
+                    <div class="hand">
+                        ${renderCard(p.sand, isHidden)}
+                        ${renderCard(p.blood, isHidden)}
+                    </div>
+                    <div class="info-tag ${i === currentPlayer ? 'active-turn' : ''}">${p.name} | 🪙 ${p.chips}</div>
+                `;
+                root.appendChild(pDiv);
+            });
+
+            document.getElementById('discard-sand-slot').innerHTML = renderCard(discardSand);
+            document.getElementById('discard-blood-slot').innerHTML = renderCard(discardBlood);
+            const canPlay = currentPlayer === 0 && gameActive && players[0].chips > 0;
+            document.getElementById('discard-sand-slot').className = `discard-slot ${canPlay ? 'can-take' : ''}`;
+            document.getElementById('discard-blood-slot').className = `discard-slot ${canPlay ? 'can-take' : ''}`;
+        }
+
+        function renderCard(card, hidden) {
+            if (!card) return '';
+            if (hidden) return `<div class="card back"></div>`;
+            return `<div class="card ${card.type !== 'normal' ? 'special' : card.family}">
+                <div class="card-val">${card.label || card.val}</div>
+                <div class="card-sym">${card.family === 'sand' ? '☀' : '❖'}</div>
+            </div>`;
+        }
+
+        function handleAction(action) {
+            if (!gameActive || currentPlayer !== 0) return;
+            const p = players[0];
+            if (action === 'sand') { discardSand = p.sand; p.sand = createCard('sand'); p.chips--; }
+            else if (action === 'blood') { discardBlood = p.blood; p.blood = createCard('blood'); p.chips--; }
+            else if (action === 'take-sand') { let tmp = p.sand; p.sand = discardSand; discardSand = tmp; p.chips--; }
+            else if (action === 'take-blood') { let tmp = p.blood; p.blood = discardBlood; discardBlood = tmp; p.chips--; }
+            nextTurn();
+        }
+
+        function nextTurn() {
+            currentPlayer++;
+            if (currentPlayer >= 4) { currentPlayer = 0; round++; if (round > 3) { endGame(); return; } }
+            updateUI();
+            if (players[currentPlayer].isAI && gameActive) setTimeout(aiTurn, 800);
+        }
+
+        function aiTurn() {
+            const p = players[currentPlayer];
+            if (p.chips > 2 && p.sand.val !== p.blood.val) {
+                if (Math.random() > 0.5) { discardSand = p.sand; p.sand = createCard('sand'); }
+                else { discardBlood = p.blood; p.blood = createCard('blood'); }
+                p.chips--;
+            }
+            nextTurn();
+        }
+
+        async function endGame() {
+            gameActive = false;
+            // Animação dos Dados
+            const d1 = document.getElementById('die1'), d2 = document.getElementById('die2');
+            d1.classList.add('rolling'); d2.classList.add('rolling');
+            
+            for(let i=0; i<15; i++) {
+                d1.innerText = ['⚀','⚁','⚂','⚃','⚄','⚅'][Math.floor(Math.random()*6)];
+                d2.innerText = ['⚀','⚁','⚂','⚃','⚄','⚅'][Math.floor(Math.random()*6)];
+                await new Promise(r => setTimeout(r, 100));
+            }
+            
+            diceResults = [Math.floor(Math.random()*6)+1, Math.floor(Math.random()*6)+1];
+            d1.classList.remove('rolling'); d2.classList.remove('rolling');
+            d1.innerText = diceResults[0]; d2.innerText = diceResults[1];
+
+            let results = players.map(p => {
+                let vS = resolveVal(p.sand, p.blood);
+                let vB = resolveVal(p.blood, p.sand);
+                const diff = Math.abs(vS - vB);
+                return { name: p.name, vS, vB, diff, isSabacc: diff === 0, total: vS + vB };
+            });
+
+            results.sort((a,b) => (a.isSabacc === b.isSabacc) ? (a.isSabacc ? a.vS - b.vS : a.diff - b.diff) : (a.isSabacc ? -1 : 1));
+            
+            updateUI();
+            setTimeout(() => {
+                alert(`${i18n[lang].win}: ${results[0].name}\nHand: ${results[0].vS}-${results[0].vB}`);
+                initGame();
+            }, 500);
+        }
+
+        function resolveVal(c, other) {
+            if (c.type === 'sylop') return other.type === 'imposter' ? diceResults[0] : other.val;
+            if (c.type === 'imposter') return diceResults[0]; // Simplificado: usa o primeiro dado
+            return c.val;
+        }
+
+        function showModal(id) { document.getElementById(id).style.display = 'block'; }
+        function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
+        function updateLang() { lang = document.getElementById('lang-sel').value; updateUI(); }
+        function applySettings() { closeModals(); initGame(); }
+
+        initGame();
+    </script>
+</body>
+</html>
